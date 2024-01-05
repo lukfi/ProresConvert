@@ -140,7 +140,14 @@
     <ClCompile Include="tiny-process-library\process_win.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="resource.h" />
     <ClInclude Include="tiny-process-library\process.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="ProresConvert.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="icon1.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

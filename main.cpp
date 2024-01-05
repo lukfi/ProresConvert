@@ -213,7 +213,7 @@ int main()
     }
     else
     {
-        SWARN("There is no files to convert. exiting...");
+        SWARN("There are no files to convert. exiting...");
     }
 
     PRINT("\n");
@@ -279,5 +279,5 @@ int main()
     {
         SUCC("Successfully converted %d file%s", successfullyConvertedFiles, successfullyConvertedFiles > 1 ? "s" : "");
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    std::this_thread::sleep_for(std::chrono::milliseconds(3000));
 }
