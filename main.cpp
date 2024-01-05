@@ -14,7 +14,7 @@
 #include "utils/screenlogger.h"
 
 #define VER_MAJ 0
-#define VER_MIN 1
+#define VER_MIN 3
 
 static const std::wstring COMMAND = L" -c:v prores_ks -profile:v 3 -vendor apl0 -bits_per_mb 500 -pix_fmt yuv422p10le ";
 
@@ -139,15 +139,16 @@ std::list<VideoFileInfo> GetFilesWithExtensions(std::list<std::string>& validExt
     return foundFiles;
 }
 
-void UpdateFileInfo(std::list<VideoFileInfo>& infos)
+bool UpdateFileInfo(std::list<VideoFileInfo>& infos)
 {
+    bool ok = true;
     for (auto& info : infos)
     {
         int exit_status;
 
         std::string fileInfoJson;
         std::wstringstream wss;
-        wss << L"ffprobe.exe " << LF::utils::FromUtf8(info.filename) << L" -print_format json -v quiet -show_format -show_streams";
+        wss << L"ffprobe.exe \"" << LF::utils::FromUtf8(info.filename) << L"\" -print_format json -v quiet -show_format -show_streams";
         //std::wcout << wss.str() << std::endl;
         Process process1(wss.str(), L"",
             [&](const char* bytes, size_t n) { fileInfoJson += std::string(bytes, n); },
@@ -191,7 +192,14 @@ void UpdateFileInfo(std::list<VideoFileInfo>& infos)
             }
             //SINFO("File info:\ncodec: %s\nframes: %d", info.codec.c_str(), info.frames);
         }
+        else
+        {
+            SWARN("Failed to find FFPROBE.exe");
+            ok = false;
+            break;
+        }
     }
+    return ok;
 }
 
 int main()
@@ -201,7 +209,11 @@ int main()
 
     std::list<std::string> validExtensions = { {"mp4"} };
     std::list<VideoFileInfo> filesToConvert = GetFilesWithExtensions(validExtensions);
-    UpdateFileInfo(filesToConvert);
+    if (!UpdateFileInfo(filesToConvert))
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+        return 1;
+    }
 
     if (filesToConvert.size())
     {
@@ -213,10 +225,13 @@ int main()
     }
     else
     {
-        SWARN("There are no files to convert. exiting...");
+        LF::fs::Directory d;
+        SWARN("There are no files to convert (%s) exiting...", d.PWD().c_str());
     }
 
-    PRINT("\n");
+    PRINT("\nPRESS ENTER to %s", filesToConvert.size() ? "start conversion" : "exit");
+    std::string line;
+    std::getline(std::cin, line);
 
     int convertCount = 0;
     int successfullyConvertedFiles = 0;
@@ -229,7 +244,7 @@ int main()
 
             std::wstringstream wss2;
             info.outputFilename = GetDestinationFileName(info.filename, "mov");
-            wss2 << L"ffmpeg -i " << LF::utils::FromUtf8(info.filename) << COMMAND << info.outputFilename;
+            wss2 << L"ffmpeg -i \"" << LF::utils::FromUtf8(info.filename) << "\"" << COMMAND << info.outputFilename;
             //std::wcout << wss2.str() << std::endl;
 
             SINFO("Converting [%d/%d]: %s -> %s", convertCount, filesToConvert.size(), info.filename.c_str(), LF::utils::ToUtf8(info.outputFilename).c_str());
