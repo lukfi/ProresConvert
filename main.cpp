@@ -15,7 +15,7 @@
 #include "utils/screenlogger.h"
 
 #define VER_MAJ 0
-#define VER_MIN 4
+#define VER_MIN 5
 
 //static const std::wstring COMMAND = L" -c:v prores_ks -profile:v 3 -vendor apl0 -bits_per_mb 500 -pix_fmt yuv422p10le ";
 
