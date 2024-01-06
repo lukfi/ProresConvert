@@ -311,7 +311,7 @@ int main()
     if (filesToConvert.size())
     {
         PRINT("Files to convert:\n");
-        for (auto f : filesToConvert)
+        for (auto& f : filesToConvert)
         {
             PRINT("  * %s (%s)\n", f.filename.c_str(), f.codec.c_str());
         }
