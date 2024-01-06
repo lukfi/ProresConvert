@@ -7,6 +7,7 @@
 #include "utils/utfconverter.h"
 #include "utils/stringutils.h"
 #include "utils/SimpleJSON/json.hpp"
+#include "utils/systemutils.h"
 #include "regexp/regexp.h"
 #include <signal.h>
 
@@ -14,9 +15,9 @@
 #include "utils/screenlogger.h"
 
 #define VER_MAJ 0
-#define VER_MIN 3
+#define VER_MIN 4
 
-static const std::wstring COMMAND = L" -c:v prores_ks -profile:v 3 -vendor apl0 -bits_per_mb 500 -pix_fmt yuv422p10le ";
+//static const std::wstring COMMAND = L" -c:v prores_ks -profile:v 3 -vendor apl0 -bits_per_mb 500 -pix_fmt yuv422p10le ";
 
 class Process : public TinyProcessLib::Process
 {
@@ -202,13 +203,105 @@ bool UpdateFileInfo(std::list<VideoFileInfo>& infos)
     return ok;
 }
 
+struct Configuration
+{
+    uint32_t bits_per_mb { 600 };
+    std::list<std::string> input_formats {{"mp4"}};
+
+    std::string ToJson()
+    {
+        json::JSON j;
+        j["bits_per_mb"] = bits_per_mb;
+        j["input_formats"] = json::Array();
+        for (auto& f : input_formats)
+        {
+            j["input_formats"].append(f);
+        }
+        return j.dump();
+    }
+    bool FromJson(const std::string& json)
+    {
+        bool ret = true;
+        //SDEB("From JSON: %s", json.c_str());
+        json::JSON j = json::JSON::Load(json);
+        uint32_t bpm = j["bits_per_mb"].ToInt();
+        std::list<std::string> in;
+        //SDEB("bpm: %d", bpm);
+        for (int i = 0; i < j["input_formats"].length(); ++i)
+        {
+            in.push_back(j["input_formats"].at(i).ToString());
+            //SDEB(">>> %s", j["input_formats"].at(i).ToString());
+        }
+
+        if (bpm > 0)
+        {
+            bits_per_mb = bpm;
+        }
+        else
+        {
+            ret = false;
+        }
+
+        if (in.size() > 0)
+        {
+            input_formats = in;
+        }
+        else
+        {
+            ret = false;
+        }
+
+        return ret;
+    }
+} gConfiguration;
+
+void CheckConfigurationFile()
+{
+    std::string configFileName  = LF::utils::GetCurrentUserAppData() + "/ProresConvert/config.txt";
+    LF::fs::File configFile(configFileName);
+    bool configurationLoaded = false;
+    if (configFile.Exists())
+    {
+        if (!configFile.Open())
+        {
+            SWARN("Failed to open configuraiton file");
+        }
+        else
+        {
+            configurationLoaded = gConfiguration.FromJson(configFile.GetAsString());
+            configFile.Close();
+        }
+    }
+
+    if (!configurationLoaded)
+    {
+        if (!configFile.Exists())
+        {
+            if (!configFile.CreateOpen())
+            {
+                SERR("Failed to create configuration file");
+                return;
+            }
+        }
+        else if (!configFile.Open(LF::fs::AccessMode_t::Write))
+        {
+            SERR("Failed to open configuration file");
+            return;
+        }
+        std::string configJson = gConfiguration.ToJson();
+        SINFO("configuration created\n%s", configJson.c_str());
+        configFile << configJson;
+    }
+}
+
 int main()
 {
-    SINFO("version: %d.%d\n", VER_MAJ, VER_MIN);
+    SINFO("version: %d.%d %s\n", VER_MAJ, VER_MIN, "");
     signal(SIGBREAK, SignalHandler);
 
-    std::list<std::string> validExtensions = { {"mp4"} };
-    std::list<VideoFileInfo> filesToConvert = GetFilesWithExtensions(validExtensions);
+    CheckConfigurationFile();
+
+    std::list<VideoFileInfo> filesToConvert = GetFilesWithExtensions(gConfiguration.input_formats);
     if (!UpdateFileInfo(filesToConvert))
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(3000));
@@ -229,6 +322,9 @@ int main()
         SWARN("There are no files to convert (%s) exiting...", d.PWD().c_str());
     }
 
+    std::wstringstream wssc;
+    wssc << L" -c:v prores_ks -profile:v 3 -vendor apl0 -bits_per_mb " << gConfiguration.bits_per_mb << L" -pix_fmt yuv422p10le ";
+
     PRINT("\nPRESS ENTER to %s", filesToConvert.size() ? "start conversion" : "exit");
     std::string line;
     std::getline(std::cin, line);
@@ -244,8 +340,8 @@ int main()
 
             std::wstringstream wss2;
             info.outputFilename = GetDestinationFileName(info.filename, "mov");
-            wss2 << L"ffmpeg -i \"" << LF::utils::FromUtf8(info.filename) << "\"" << COMMAND << info.outputFilename;
-            //std::wcout << wss2.str() << std::endl;
+            wss2 << L"ffmpeg -i \"" << LF::utils::FromUtf8(info.filename) << "\"" << wssc.str() << info.outputFilename;
+            std::wcout << wss2.str() << std::endl;
 
             SINFO("Converting [%d/%d]: %s -> %s", convertCount, filesToConvert.size(), info.filename.c_str(), LF::utils::ToUtf8(info.outputFilename).c_str());
             bool firstPercentInfoPrinted = false;
